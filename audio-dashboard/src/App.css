@@ -1,0 +1,116 @@
+#root {
+  max-width: 850px;
+  margin: 40px auto;
+  padding: 20px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: #121214;
+  color: #e1e1e6;
+}
+
+.dashboard {
+  background: #202024;
+  padding: 35px;
+  border-radius: 12px;
+  border: 1px solid #29292e;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  transition: all 0.4s ease;
+}
+
+.panic-mode {
+  border-color: #f75a68;
+  box-shadow: 0 0 50px rgba(247, 90, 104, 0.25);
+}
+
+.status-panel {
+  background: #121214;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 25px;
+}
+
+.text-green { color: #04d361; font-weight: bold; margin-left: 6px; }
+.text-red { color: #f75a68; font-weight: bold; margin-left: 6px; }
+
+.action-btn {
+  color: white;
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.start-monitoring { background: #00875f; }
+.start-monitoring:hover:not(:disabled) { background: #00b37e; }
+.stop-monitoring { background: #7c7c8a; }
+.stop-monitoring:hover { background: #9494a6; }
+
+.action-btn:disabled {
+  background: #323238;
+  color: #7c7c8a;
+  cursor: not-allowed;
+}
+
+.alert-banner {
+  margin-top: 25px;
+  background: #f75a68;
+  color: #121214;
+  padding: 20px;
+  border-radius: 6px;
+  font-weight: bold;
+  animation: flash 1s infinite alternate;
+}
+
+@keyframes flash {
+  from { opacity: 1; }
+  to { opacity: 0.8; }
+}
+
+.live-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.transcript-box, .log-box {
+  background: #121214;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #29292e;
+  text-align: left;
+}
+
+.transcript-box h3, .log-box h3 {
+  margin-top: 0;
+  font-size: 0.95rem;
+  color: #8d8d99;
+  border-bottom: 1px solid #29292e;
+  padding-bottom: 8px;
+}
+
+.transcript-text {
+  font-size: 1.15rem;
+  color: #e1e1e6;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.logs-container {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #c4c4cc;
+}
+
+.log-line {
+  margin-bottom: 6px;
+  border-bottom: 1px solid #1c1c1e;
+  padding-bottom: 4px;
+}

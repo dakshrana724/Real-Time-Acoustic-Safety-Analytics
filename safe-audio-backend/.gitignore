@@ -1,0 +1,14 @@
+# Python dependencies
+venv/
+__pycache__/
+*.pyc
+
+# Node dependencies
+node_modules/
+dist/
+
+# Large ML Model files 
+*.pkl
+
+#  containing private keys
+.env
