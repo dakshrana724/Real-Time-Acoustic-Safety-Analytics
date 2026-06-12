@@ -2,9 +2,9 @@ import os
 import pickle
 from flask import Flask
 from flask_socketio import SocketIO, emit
-from dotenv import  load_dotenv # 🚀 Import dotenv loader
+from dotenv import load_dotenv # 🚀 Import dotenv loader
 import google.generativeai as genai
-# from groq import Groq
+from groq import Groq
 
 # 💥 Load environment variables from the local .env file
 load_dotenv()
@@ -14,12 +14,12 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # 🔐 Safely grab the credentials from the operating system environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Initialize Cloud Clients using the secure keys
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-# groq_client = Groq(api_key=GROQ_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 # 🧠 2. Load the Local Edge Machine Learning Layer (Tier 1 Filter)
 print("⚙️ Loading custom local Natural Language Processing models...")
@@ -51,7 +51,7 @@ def handle_live_transcript(data):
     if not transcript:
         return
 
-    print(f"🎙️ Ingestion: \"{transcript}\"")
+    print(f"\n🎙️ Ingestion: \"{transcript}\"")
 
     try:
         # 🧪 Tier 1: Local Edge Machine Learning Evaluation
@@ -66,7 +66,7 @@ def handle_live_transcript(data):
         else:
             print("⚠️ [Tier 1 Edge]: Potential Distress Detected! Escalating to Tier 2 Cloud...")
             
-            # 🌤️ Tier 2: Cloud LLM Contextual Validation
+            # 🌤️ Tier 2: Cloud LLM Contextual Validation Prompt
             prompt = (
                 f"You are a validation layer analyzing a flagged vehicle cabin transcript.\n"
                 f"Transcript to evaluate: \"{transcript}\"\n\n"
@@ -76,19 +76,41 @@ def handle_live_transcript(data):
                 f"REASON: [A 5-word summary of your contextual decision]"
             )
             
-            response = gemini_model.generate_content(prompt)
-            result_text = response.text.strip().upper().replace("*", "")
+            result_text = ""
+            provider_used = ""
+
+            # 🛠️ UNIVERSAL CIRCUIT BREAKER: Catch absolutely ANY error from Gemini
+            try:
+                print("☁️ Routing to Primary Cloud Provider (Gemini)...")
+                response = gemini_model.generate_content(prompt)
+                result_text = response.text.strip().upper().replace("*", "")
+                provider_used = "Gemini Primary"
             
-            print(f"🤖 [Tier 2 Gemini Cloud] Evaluation -> \n{result_text}\n")
+            except Exception as gemini_err:
+                # 💥 Stripped out the restrictive "if 429" filter. Catch everything!
+                print(f"\n🔄 [CIRCUIT BREAKER ACTIVE]: Gemini hit a wall: {gemini_err}")
+                print("⚡ Instantly routing traffic to Secondary Cloud Circuit (Groq Llama-3)...")
+                
+                try:
+                    chat_completion = groq_client.chat.completions.create(
+                        messages=[{"role": "user", "content": prompt}],
+                        model="llama-3.1-8b-instant",  # 🔥 UPDATED: Swapped out decommissioned model ID
+                        temperature=0.0
+                    )
+                    result_text = chat_completion.choices[0].message.content.strip().upper().replace("*", "")
+                    provider_used = "Groq Backup Failover"
+                except Exception as groq_err:
+                    print(f"❌ Critical: Both Cloud Providers Failed! {groq_err}")
+                    raise groq_err  # Only crash outer loop if both services are dead
             
             # Fire alerts over WebSockets based on deep validation
             if "STATUS: RED" in result_text or "RED" in result_text.split("STATUS:")[-1]:
-                print("🚨 CRITICAL ALERT BROADCASTED TO FRONTEND!")
+                print(f"🚨 CRITICAL ALERT BROADCASTED VIA [{provider_used}]!")
                 reason = result_text.split("REASON:")[-1].strip() if "REASON:" in result_text else "Crisis confirmed"
-                emit('safety_alert', {'status': 'RED', 'info': reason}, broadcast=True)
+                emit('safety_alert', {'status': 'RED', 'info': f"{reason} ({provider_used})"}, broadcast=True)
             else:
-                print("🍃 Cloud verification determined a False Positive. System Clear.")
-                emit('chunk_processed', {'status': 'processed', 'info': 'False Positive (Cleared by Cloud)'})
+                print(f"🍃 Verification via [{provider_used}] determined a False Positive. System Clear.")
+                emit('chunk_processed', {'status': 'processed', 'info': f'Cleared by Cloud ({provider_used})'})
 
     except Exception as e:
         print(f"⚠️ Hybrid Pipeline Error: {e}")
