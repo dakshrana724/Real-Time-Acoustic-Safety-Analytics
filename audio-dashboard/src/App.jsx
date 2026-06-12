@@ -13,8 +13,11 @@ function App() {
 
   const recognitionRef = useRef(null)
   const explicitStopRef = useRef(false)
+  const isRestartingRef = useRef(false)
+  
+  // 📍 NEW: Reference to store the car cabin's live GPS coordinates
+  const locationRef = useRef({ lat: null, lng: null })
 
-  // Helper to log system events dynamically on screen
   const addLog = (message) => {
     setSystemLogs((prev) => [ `[${new Date().toLocaleTimeString()}] ${message}`, ...prev.slice(0, 15) ])
   }
@@ -92,9 +95,13 @@ function App() {
         setLatestTranscript(transcript)
         addLog(`Spoken Context: "${transcript}"`)
 
-        // Fire text across local network sockets to your Python classifier instantly
+        // 📍 UPDATED: Packaging text string alongside live spatial telemetry
         if (socket.connected) {
-          socket.emit('live_transcript', { text: transcript })
+          socket.emit('live_transcript', { 
+            text: transcript,
+            lat: locationRef.current.lat,
+            lng: locationRef.current.lng
+          })
         }
       }
     }
@@ -106,6 +113,26 @@ function App() {
 
   const startContinuousMonitoring = () => {
     setAlertInfo(null)
+    
+    // 📍 NEW: Fetch live telemetry coords using HTML5 Geolocation API
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          locationRef.current = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          }
+          addLog(`📍 Telemetry Locked: Lat ${position.coords.latitude.toFixed(4)}, Lng ${position.coords.longitude.toFixed(4)}`)
+        },
+        (error) => {
+          addLog(`⚠️ Telemetry Warning: Unable to retrieve location (${error.message})`)
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      )
+    } else {
+      addLog('⚠️ Telemetry Error: Geolocation not supported by this browser.')
+    }
+
     initializeSpeechEngine()
   }
 

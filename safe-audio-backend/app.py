@@ -1,27 +1,33 @@
 import os
 import pickle
+import threading  # 🚀 NEW: For non-blocking asynchronous execution
 from flask import Flask
 from flask_socketio import SocketIO, emit
-from dotenv import load_dotenv # 🚀 Import dotenv loader
+from dotenv import load_dotenv
 import google.generativeai as genai
 from groq import Groq
+from twilio.rest import Client  # 🚀 NEW: Import Twilio client
 
-# 💥 Load environment variables from the local .env file
 load_dotenv()
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# 🔐 Safely grab the credentials from the operating system environment
+# 🔐 Extract Credentials
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE = os.getenv("TWILIO_PHONE_NUMBER")
+EMERGENCY_CONTACT = os.getenv("EMERGENCY_CONTACT_NUMBER")
 
-# Initialize Cloud Clients using the secure keys
+# Initialize Clients
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 groq_client = Groq(api_key=GROQ_API_KEY)
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID else None
 
-# 🧠 2. Load the Local Edge Machine Learning Layer (Tier 1 Filter)
+# 🧠 Load Local Edge ML
 print("⚙️ Loading custom local Natural Language Processing models...")
 try:
     with open("vectorizer.pkl", "rb") as f:
@@ -32,33 +38,81 @@ try:
 except Exception as e:
     print(f"❌ Failed to load local .pkl assets: {e}")
 
+
+# 📞 BACKGROUND DISPATCH WORKER (Runs on an isolated thread)
+def execute_emergency_dispatch(transcript, lat, lng, provider, reason):
+    print("☎️ Initializing background emergency dispatch worker...")
+    if not twilio_client:
+        print("⚠️ Dispatch Aborted: Twilio client credentials missing from .env")
+        return
+
+    # Build a clean, real-time tracking link using the incoming telemetry
+    maps_link = f"https://www.google.com/maps?q={lat},{lng}" if lat and lng else "Location unavailable"
+
+    # 1. Draft the Dynamic SMS Text Payload
+    # 🧪 Minimalist layout to drop your transmission from 6 segments down to 1
+    sms_body = f"CRITICAL: {reason}. Driver said: '{transcript}'. Location: http://maps.google.com/?q={lat},{lng}"
+
+    # 2. Draft the Interactive Voice Synthesis Message (TwiML)
+    twiml_voice_script = (
+        f"<Response>"
+        f"<Say voice='en-US-Standard-C' speed='0.95'>"
+        f"Emergency dispatch alert triggered by vehicle cabin monitoring. "
+        f"A critical safety crisis was verified using {provider}. "
+        f"The system logged the following statement. {transcript}. "
+        f"An emergency text message containing the driver's precise Google Maps GPS location has been sent to your phone. "
+        f"Please check your messages and take immediate action."
+        f"</Say>"
+        f"</Response>"
+    )
+
+    try:
+        # Send the Message
+        print("💬 Dispatching outbound security text message...")
+        message = twilio_client.messages.create(
+            body=sms_body,
+            from_=TWILIO_PHONE,
+            to=EMERGENCY_CONTACT
+        )
+        print(f"✅ Text sent successfully! SID: {message.sid}")
+
+        # Place the automated Voice Call
+        print("🤙 Initiating outbound automated emergency call sequence...")
+        call = twilio_client.calls.create(
+            twiml=twiml_voice_script,
+            from_=TWILIO_PHONE,
+            to=EMERGENCY_CONTACT
+        )
+        print(f"✅ Voice dispatch established successfully! SID: {call.sid}")
+
+    except Exception as dispatch_err:
+        print(f"❌ Telephony Dispatch Pipeline Failure: {dispatch_err}")
+
+
 @app.route('/')
 def index():
-    return "Hybrid Edge-Cloud Safety Engine Active."
+    return "Hybrid Safety Engine with Dispatch active."
 
 @socketio.on('connect')
 def handle_connect():
     print("⚡ React continuous text-stream connected!")
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print("❌ Client disconnected.")
-
-# 🔄 3. Continuous Real-Time Text Stream Event
 @socketio.on('live_transcript')
 def handle_live_transcript(data):
     transcript = data.get('text', '').strip()
     if not transcript:
         return
 
+    lat = data.get('lat')
+    lng = data.get('lng')
+
     print(f"\n🎙️ Ingestion: \"{transcript}\"")
+    print(f"📍 Location Coordinates -> Lat: {lat}, Lng: {lng}")
 
     try:
-        # 🧪 Tier 1: Local Edge Machine Learning Evaluation
         X_transformed = vectorizer.transform([transcript])
         local_prediction = local_model.predict(X_transformed)[0]
 
-        # Class 0 = Safe, Class 1 = Potential Distress
         if local_prediction == 0:
             print("✅ [Tier 1 Edge]: Safe Conversation. Bypassing Cloud APIs.")
             emit('chunk_processed', {'status': 'processed', 'info': 'Safe (Local Execution)'})
@@ -66,11 +120,10 @@ def handle_live_transcript(data):
         else:
             print("⚠️ [Tier 1 Edge]: Potential Distress Detected! Escalating to Tier 2 Cloud...")
             
-            # 🌤️ Tier 2: Cloud LLM Contextual Validation Prompt
             prompt = (
                 f"You are a validation layer analyzing a flagged vehicle cabin transcript.\n"
                 f"Transcript to evaluate: \"{transcript}\"\n\n"
-                f"Determine if this is an actual, active emergency or crisis, or just a false positive (like singing a song or casual talking).\n"
+                f"Determine if this is an actual, active emergency or crisis, or just a false positive.\n"
                 f"Reply strictly in this exact format:\n"
                 f"STATUS: [RED if an active crisis/threat, GREEN if it is a false positive safe context]\n"
                 f"REASON: [A 5-word summary of your contextual decision]"
@@ -79,37 +132,44 @@ def handle_live_transcript(data):
             result_text = ""
             provider_used = ""
 
-            # 🛠️ UNIVERSAL CIRCUIT BREAKER: Catch absolutely ANY error from Gemini
             try:
                 print("☁️ Routing to Primary Cloud Provider (Gemini)...")
                 response = gemini_model.generate_content(prompt)
                 result_text = response.text.strip().upper().replace("*", "")
                 provider_used = "Gemini Primary"
-            
             except Exception as gemini_err:
-                # 💥 Stripped out the restrictive "if 429" filter. Catch everything!
                 print(f"\n🔄 [CIRCUIT BREAKER ACTIVE]: Gemini hit a wall: {gemini_err}")
                 print("⚡ Instantly routing traffic to Secondary Cloud Circuit (Groq Llama-3)...")
-                
                 try:
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt}],
-                        model="llama-3.1-8b-instant",  # 🔥 UPDATED: Swapped out decommissioned model ID
+                        model="llama-3.1-8b-instant",
                         temperature=0.0
                     )
                     result_text = chat_completion.choices[0].message.content.strip().upper().replace("*", "")
                     provider_used = "Groq Backup Failover"
                 except Exception as groq_err:
                     print(f"❌ Critical: Both Cloud Providers Failed! {groq_err}")
-                    raise groq_err  # Only crash outer loop if both services are dead
+                    return
+
+            print(f"🤖 [{provider_used}] Evaluation -> \n{result_text}\n")
             
-            # Fire alerts over WebSockets based on deep validation
             if "STATUS: RED" in result_text or "RED" in result_text.split("STATUS:")[-1]:
                 print(f"🚨 CRITICAL ALERT BROADCASTED VIA [{provider_used}]!")
                 reason = result_text.split("REASON:")[-1].strip() if "REASON:" in result_text else "Crisis confirmed"
+                
+                # Send real-time data status right back to the React UI
                 emit('safety_alert', {'status': 'RED', 'info': f"{reason} ({provider_used})"}, broadcast=True)
+                
+                # 🚀 ASYNCHRONOUS THREAD HANDOFF: Spawns the Twilio worker in the background
+                dispatch_thread = threading.Thread(
+                    target=execute_emergency_dispatch,
+                    args=(transcript, lat, lng, provider_used, reason)
+                )
+                dispatch_thread.start() # Starts processing the SMS/Call instantly without blocking the server
+                
             else:
-                print(f"🍃 Verification via [{provider_used}] determined a False Positive. System Clear.")
+                print(f"🍃 Verification via [{provider_used}] cleared the context. System Clear.")
                 emit('chunk_processed', {'status': 'processed', 'info': f'Cleared by Cloud ({provider_used})'})
 
     except Exception as e:
@@ -117,5 +177,4 @@ def handle_live_transcript(data):
         emit('chunk_processed', {'status': 'error', 'message': str(e)})
 
 if __name__ == '__main__':
-    print("🚀 Starting Hybrid Cascading Audio-Text Backend Server")
     socketio.run(app, host='127.0.0.1', port=5000, debug=True)
