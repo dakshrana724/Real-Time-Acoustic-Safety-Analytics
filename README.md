@@ -1,5 +1,8 @@
 # Monitor real-time audio for in-transit safety alerts
 
+Problem mentioned in (Ai-google project  https://cloud.google.com/blog/products/ai-machine-learning/real-world-gen-ai-use-cases-with-technical-blueprints 
+)
+
 This repository hosts a production-grade, event-driven intelligent system designed to monitor real-time vehicle cabin audio for in-transit safety alerts and crises. 
 The architecture couples local machine learning optimization at the edge with an asynchronous multi-cloud cascading validation framework and an automated telephony emergency dispatch gateway.
 
