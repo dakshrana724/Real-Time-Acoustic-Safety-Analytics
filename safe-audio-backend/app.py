@@ -1,19 +1,19 @@
 import os
 import pickle
-import threading  # 🚀 NEW: For non-blocking asynchronous execution
+import threading 
 from flask import Flask
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 import google.generativeai as genai
 from groq import Groq
-from twilio.rest import Client  # 🚀 NEW: Import Twilio client
+from twilio.rest import Client  
 
 load_dotenv()
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# 🔐 Extract Credentials
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -21,39 +21,36 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE = os.getenv("TWILIO_PHONE_NUMBER")
 EMERGENCY_CONTACT = os.getenv("EMERGENCY_CONTACT_NUMBER")
 
-# Initialize Clients
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 groq_client = Groq(api_key=GROQ_API_KEY)
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID else None
 
-# 🧠 Load Local Edge ML
-print("⚙️ Loading custom local Natural Language Processing models...")
+
+print(" Loading custom local Natural Language Processing models... Ruko zra sabar karo")
 try:
     with open("vectorizer.pkl", "rb") as f:
         vectorizer = pickle.load(f)
     with open("safety_model.pkl", "rb") as f:
         local_model = pickle.load(f)
-    print("🧠 Local ML Model and Vectorizer armed successfully!")
+    print(" Local ML Model and Vectorizer armed successfully!")
 except Exception as e:
-    print(f"❌ Failed to load local .pkl assets: {e}")
+    print(f" Failed to load local .pkl assets: {e}")
 
 
-# 📞 BACKGROUND DISPATCH WORKER (Runs on an isolated thread)
+
 def execute_emergency_dispatch(transcript, lat, lng, provider, reason):
-    print("☎️ Initializing background emergency dispatch worker...")
+    print(" Initializing background emergency dispatch worker...")
     if not twilio_client:
-        print("⚠️ Dispatch Aborted: Twilio client credentials missing from .env")
+        print("Dispatch Aborted: Twilio client credentials missing from .env")
         return
 
-    # Build a clean, real-time tracking link using the incoming telemetry
     maps_link = f"https://www.google.com/maps?q={lat},{lng}" if lat and lng else "Location unavailable"
 
-    # 1. Draft the Dynamic SMS Text Payload
-    # 🧪 Minimalist layout to drop your transmission from 6 segments down to 1
+  
     sms_body = f"CRITICAL: {reason}. Driver said: '{transcript}'. Location: http://maps.google.com/?q={lat},{lng}"
 
-    # 2. Draft the Interactive Voice Synthesis Message (TwiML)
+    
     twiml_voice_script = (
         f"<Response>"
         f"<Say voice='en-US-Standard-C' speed='0.95'>"
@@ -67,8 +64,8 @@ def execute_emergency_dispatch(transcript, lat, lng, provider, reason):
     )
 
     try:
-        # Send the Message
-        print("💬 Dispatching outbound security text message...")
+        
+        print(" Dispatching outbound security text message...")
         message = twilio_client.messages.create(
             body=sms_body,
             from_=TWILIO_PHONE,
@@ -76,8 +73,8 @@ def execute_emergency_dispatch(transcript, lat, lng, provider, reason):
         )
         print(f"✅ Text sent successfully! SID: {message.sid}")
 
-        # Place the automated Voice Call
-        print("🤙 Initiating outbound automated emergency call sequence...")
+        
+        print("Initiating outbound automated emergency call sequence...")
         call = twilio_client.calls.create(
             twiml=twiml_voice_script,
             from_=TWILIO_PHONE,
@@ -133,13 +130,13 @@ def handle_live_transcript(data):
             provider_used = ""
 
             try:
-                print("☁️ Routing to Primary Cloud Provider (Gemini)...")
+                print(" Routing to Primary Cloud Provider (Gemini)...")
                 response = gemini_model.generate_content(prompt)
                 result_text = response.text.strip().upper().replace("*", "")
                 provider_used = "Gemini Primary"
             except Exception as gemini_err:
-                print(f"\n🔄 [CIRCUIT BREAKER ACTIVE]: Gemini hit a wall: {gemini_err}")
-                print("⚡ Instantly routing traffic to Secondary Cloud Circuit (Groq Llama-3)...")
+                print(f"\n [CIRCUIT BREAKER ACTIVE]: Gemini hit a wall: {gemini_err}")
+                print(" Instantly routing traffic to Secondary Cloud Circuit (Groq Llama-3)...")
                 try:
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt}],
@@ -149,19 +146,19 @@ def handle_live_transcript(data):
                     result_text = chat_completion.choices[0].message.content.strip().upper().replace("*", "")
                     provider_used = "Groq Backup Failover"
                 except Exception as groq_err:
-                    print(f"❌ Critical: Both Cloud Providers Failed! {groq_err}")
+                    print(f" Critical: Both Cloud Providers Failed! {groq_err}")
                     return
 
-            print(f"🤖 [{provider_used}] Evaluation -> \n{result_text}\n")
+            print(f" [{provider_used}] Evaluation -> \n{result_text}\n")
             
             if "STATUS: RED" in result_text or "RED" in result_text.split("STATUS:")[-1]:
-                print(f"🚨 CRITICAL ALERT BROADCASTED VIA [{provider_used}]!")
+                print(f" CRITICAL ALERT BROADCASTED VIA [{provider_used}]!")
                 reason = result_text.split("REASON:")[-1].strip() if "REASON:" in result_text else "Crisis confirmed"
                 
                 # Send real-time data status right back to the React UI
                 emit('safety_alert', {'status': 'RED', 'info': f"{reason} ({provider_used})"}, broadcast=True)
                 
-                # 🚀 ASYNCHRONOUS THREAD HANDOFF: Spawns the Twilio worker in the background
+                # ASYNCHRONOUS THREAD HANDOFF: Spawns the Twilio worker in the background
                 dispatch_thread = threading.Thread(
                     target=execute_emergency_dispatch,
                     args=(transcript, lat, lng, provider_used, reason)
@@ -173,7 +170,7 @@ def handle_live_transcript(data):
                 emit('chunk_processed', {'status': 'processed', 'info': f'Cleared by Cloud ({provider_used})'})
 
     except Exception as e:
-        print(f"⚠️ Hybrid Pipeline Error: {e}")
+        print(f" Hybrid Pipeline Error: {e}")
         emit('chunk_processed', {'status': 'error', 'message': str(e)})
 
 if __name__ == '__main__':

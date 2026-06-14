@@ -15,7 +15,7 @@ function App() {
   const explicitStopRef = useRef(false)
   const isRestartingRef = useRef(false)
   
-  // 📍 NEW: Reference to store the car cabin's live GPS coordinates
+  // NEW: Reference to store the car cabin's live GPS coordinates
   const locationRef = useRef({ lat: null, lng: null })
 
   const addLog = (message) => {
@@ -41,7 +41,7 @@ function App() {
     // Catch critical threat alerts from the Python pipeline
     socket.on('safety_alert', (res) => {
       setAlertInfo(res.info)
-      addLog(`🚨 ALARM: ${res.info}`)
+      addLog(` ALARM: ${res.info}`)
     })
 
     return () => {
@@ -95,7 +95,7 @@ function App() {
         setLatestTranscript(transcript)
         addLog(`Spoken Context: "${transcript}"`)
 
-        // 📍 UPDATED: Packaging text string alongside live spatial telemetry
+        // UPDATED: Packaging text string alongside live spatial telemetry
         if (socket.connected) {
           socket.emit('live_transcript', { 
             text: transcript,
@@ -114,7 +114,7 @@ function App() {
   const startContinuousMonitoring = () => {
     setAlertInfo(null)
     
-    // 📍 NEW: Fetch live telemetry coords using HTML5 Geolocation API
+    //  NEW: Fetch live telemetry coords using HTML5 Geolocation API
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -122,15 +122,15 @@ function App() {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           }
-          addLog(`📍 Telemetry Locked: Lat ${position.coords.latitude.toFixed(4)}, Lng ${position.coords.longitude.toFixed(4)}`)
+          addLog(` Telemetry Locked: Lat ${position.coords.latitude.toFixed(4)}, Lng ${position.coords.longitude.toFixed(4)}`)
         },
         (error) => {
-          addLog(`⚠️ Telemetry Warning: Unable to retrieve location (${error.message})`)
+          addLog(` Telemetry Warning: Unable to retrieve location (${error.message})`)
         },
         { enableHighAccuracy: true, timeout: 10000 }
       )
     } else {
-      addLog('⚠️ Telemetry Error: Geolocation not supported by this browser.')
+      addLog(' Telemetry Error: Geolocation not supported by this browser.')
     }
 
     initializeSpeechEngine()
@@ -169,7 +169,7 @@ function App() {
 
       {alertInfo && (
         <div className="alert-banner">
-          <h2>🚨 CRITICAL THREAT SIGNALS FLAGGED</h2>
+          <h2>CRITICAL THREAT SIGNALS FLAGGED</h2>
           <p><strong>Verification Reason:</strong> {alertInfo}</p>
         </div>
       )}

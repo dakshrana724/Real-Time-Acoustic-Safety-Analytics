@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 
-# 📊 1. Curate the Dataset (Vehicle Cabin Context)
+#  1. Curate the Dataset (Vehicle Cabin Context)
 # 0 = Normal/Safe Conversation, 1 = Active Threat/Distress
 data = [
     # --- Class 0: Safe/Normal Phrases ---
@@ -37,33 +37,33 @@ data = [
 texts = [item[0] for item in data]
 labels = [item[1] for item in data]
 
-print("🧠 Initializing Local Edge-Model Training Pipeline...")
+print(" Initializing Local Edge-Model Training Pipeline...")
 
-# ⚙️ 2. Text Vectorization (TF-IDF)
+#  2. Text Vectorization (TF-IDF)
 # Converts sentences into numerical feature matrices based on word importance
 vectorizer = TfidfVectorizer(lowercase=True, stop_words='english')
 X = vectorizer.fit_transform(texts)
 y = labels
 
-# ⚔️ 3. Train/Test Split (For evaluation)
+#  3. Train/Test Split (For evaluation)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# 🚀 4. Model Training
+#  4. Model Training
 # Using Logistic Regression - perfect for low-latency, binary edge classification
 model = LogisticRegression()
 model.fit(X_train, y_train)
 
-# 📉 5. Evaluate the Quality
+#  5. Evaluate the Quality
 y_pred = model.predict(X_test)
 print("\n📋 Model Evaluation Metrics:")
 print(classification_report(y_test, y_pred, target_names=['Safe (0)', 'Distress (1)']))
 
-# 💾 6. Serialize and Save the Model Assets
-print("💾 Saving trained intelligence assets locally...")
+#  6. Serialize and Save the Model Assets
+print(" Saving trained intelligence assets locally...")
 with open("vectorizer.pkl", "wb") as f:
     pickle.dump(vectorizer, f)
 
 with open("safety_model.pkl", "wb") as f:
     pickle.dump(model, f)
 
-print("\n🎉 Success! 'safety_model.pkl' and 'vectorizer.pkl' are armed and ready.")
+print("\n Success! 'safety_model.pkl' and 'vectorizer.pkl' are armed and ready.")
